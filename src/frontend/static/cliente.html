@@ -1,0 +1,644 @@
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+<script type="text/javascript" src="static/jquery.min.js"></script>
+<script type="text/javascript" src="static/jquery-ui.min.js"></script>
+<script type="text/javascript">
+var id;
+var ancho;
+var alto;
+var barco = [];
+var peleando = false;
+
+function conectar() {
+    loguear("Iniciando conexión TCP...", 'black');
+    $.get('/comandos/new/', function(data) {
+        if (data == "ERROR_SOCKET") {
+            loguear("¡Error! ¿Está corriendo el server?", 'red');
+            $('#coneccion').hide();
+	    $('#error').show();
+        } else {
+            id = data;
+            loguear("¡Conectado con éxito!", 'green');
+            $('#coneccion').hide();
+            $('#registro').fadeIn();
+	}
+    })
+    .error(function(jqXHR, textStatus, errorThrown) {
+        if(textStatus == 'timeout') {
+            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+        } else {
+            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+        }
+        $('#coneccion').hide();
+        $('#error').show();
+    });
+    return false;
+}
+
+function registrar() {
+    if ($('#nombre_equipo').val().length < 1) {
+        alert('¡Ingresá un nombre de equipo!');
+        return false;
+    }
+
+    u = $('#nombre_equipo').val();
+    msg = "EQUIPO " + u;
+    loguear("> " + msg, 'blue');
+    $.get('/comandos/' + id + '/' + msg, function(data) {
+        loguear("< " + data, 'gray');
+        m = data.match(/TABLERO (\d+) (\d+)/);
+        if (!m) {
+            loguear("¡Respuesta inesperada!", 'red');
+            $('#registro').hide();
+            $('#error').show();
+        } else {
+            ancho = m[1];
+            alto = m[2];
+            $('#registro').hide();
+
+            // Armo el tablero
+            for(j = 0; j < alto; j++) {
+                $("#tablero > table:first").append('<tr id="fila_'+ j + '"></tr>');
+                for(i = 0; i < ancho; i++) {
+                    $("#fila_" + j).append('<td><div id="casilla_'+ j +'_'+ i +'" class="casilla">&nbsp;</div></td>');
+                }
+            }
+
+            // Callback para drag & drop
+            $('.casilla').droppable({
+                drop: function(event, ui) {
+                    m = $(this).attr('id').match(/casilla_(\d+)_(\d+)/);
+                    fila = m[1];
+                    columna = m[2];
+                    tipo = $(ui.draggable).attr('id')
+
+                    esBarco = (tipo == "barco");
+                    msg =  esBarco ? "PARTE_BARCO" : "BOMBA";
+                    msg += " " + fila + " " + columna;
+
+                    loguear("> " + msg, 'blue');
+                    var recuadro = $(this);
+                    $.get('/comandos/' + id + '/' + msg, function(data) {
+                       loguear("< " + data,  'gray');
+                       if (data == "OK") {
+                           if(esBarco){
+                               barco.push({fila:fila, columna:columna, contenido: 'B'});
+                               recuadro.removeClass("casilla");
+                               recuadro.addClass("tecla_puesta");
+                               recuadro.html('B');
+                           }else{
+                            i = 'casilla_' + fila + '_' + columna;
+                            $('#'+i).removeClass("casilla");
+                            $('#'+i).addClass("tecla_puesta");
+                            $('#'+i).html(' ');
+                           }
+                       } else if (data == "ERROR") {
+                           if(esBarco){
+                               loguear("Eliminando barco...", 'red');
+                               for(k in barco) {
+                                   i = 'casilla_' + barco[k].fila + '_' + barco[k].columna;
+                                   $('#'+i).removeClass("tecla_puesta");
+                                   $('#'+i).addClass("casilla");
+                                   $('#'+i).html(' ');
+                               }
+                               barco = [];
+                           }
+                       }
+                       else if (data == "GOLPE" || data == "ESTABA_GOLPEADO") {
+                            i = 'casilla_' + fila + '_' + columna;
+                            $('#'+i).removeClass("casilla");
+                            $('#'+i).addClass("tecla_puesta");
+                            $('#'+i).html('*');
+                       } else {
+                           loguear("¡Respuesta inesperada!", 'red');
+                           $('#juego').hide();
+                           $('#error').show();
+                       }
+
+                    })
+                    .error(function(jqXHR, textStatus, errorThrown) {
+                        if(textStatus == 'timeout') {
+                            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+                        } else {
+                            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+                        }
+                        $('#juego').hide();
+                        $('#error').show();
+                    });
+                }
+            });
+            $('#juego').fadeIn();
+        }
+    })
+    .error(function(jqXHR, textStatus, errorThrown) {
+        if(textStatus == 'timeout') {
+            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+        } else {
+            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+        }
+        $('#registro').hide();
+        $('#error').show();
+    });
+    return false;
+}
+
+function barco_completo() {
+    msg = "BARCO_TERMINADO";
+    loguear("> " + msg, 'blue');
+    $.get('/comandos/' + id + '/' + msg, function(data) {
+        loguear("< " + data,  'gray');
+        if (data == "OK") {
+            // Paso las partes amarillas a "planta permanente"
+            for(k in barco) {
+               i = 'casilla_' + barco[k].fila + '_' + barco[k].columna;
+               $('#'+i).removeClass("tecla_puesta");
+               $('#'+i).addClass("tecla");
+            }
+            barco = [];
+        } else if (data == "ERROR") {
+            loguear("Eliminando barco...", 'red');
+            for(k in barco) {
+               i = 'casilla_' + barco[k].fila + '_' + barco[k].columna;
+               $('#'+i).removeClass("tecla_puesta");
+               $('#'+i).addClass("casilla");
+               $('#'+i).html(' ');
+            }
+        } else {
+            loguear("¡Respuesta inesperada!", 'red');
+            $('#juego').hide();
+            $('#error').show();
+        }
+    })
+    .error(function(jqXHR, textStatus, errorThrown) {
+        if(textStatus == 'timeout') {
+            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+        } else {
+            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+        }
+        $('#coneccion').hide();
+        $('#error').show();
+    });
+    return false;
+}
+
+function barcos_listos() {
+    msg = "LISTO";
+    loguear("> " + msg, 'blue');
+    $.get('/comandos/' + id + '/' + msg, function(data) {
+        loguear("< " + data,  'gray');
+        if (data == "OK") {
+            //Deshabilitar barcos
+            $('#btn-barco-terminado').addClass("deshabilitar");
+            $('#barco').hide();
+        } else if (data == "ERROR") {
+
+        } else {
+            loguear("¡Respuesta inesperada!", 'red');
+            $('#juego').hide();
+            $('#error').show();
+        }
+    })
+    .error(function(jqXHR, textStatus, errorThrown) {
+        if(textStatus == 'timeout') {
+            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+        } else {
+            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+        }
+        $('#coneccion').hide();
+        $('#error').show();
+    });
+    return false;
+}
+
+function update() {
+    msg = "UPDATE";
+    loguear("> " + msg, 'blue');
+    $.get('/comandos/' + id + '/' + msg, function(data) {
+        loguear("< " + data,  'gray');
+        m = data.match(/^(BARCOS|BATALLA) ([A-Za-z\-\*]+)$/);
+	if (m) {
+
+            if(m[1] == "BATALLA"){
+                $('#bomba').show();
+            }
+
+            n = 0;
+            for(j = 0; j < alto; j++) {
+                for(i = 0; i < ancho; i++) {
+                    letra = m[2][n];
+                    ide = 'casilla_' + j + '_' + i;
+                    if(letra != '-') {
+                        $('#'+ide).removeClass("casilla");
+                        $('#'+ide).addClass("tecla");
+                        $('#'+ide).html(letra);
+                    }else{
+                        $('#'+ide).removeClass("tecla");
+                        $('#'+ide).addClass("casilla");
+                        $('#'+ide).html("&nbsp;");
+                    }
+                    n++;
+                }
+            }
+
+        } else {
+            loguear("¡Respuesta inesperada!", 'red');
+            $('#juego').hide();
+            $('#error').show();
+        }
+    })
+    .error(function(jqXHR, textStatus, errorThrown) {
+        if(textStatus == 'timeout') {
+            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+        } else {
+            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+        }
+        $('#coneccion').hide();
+        $('#error').show();
+    });
+    return false;
+}
+
+function finalizar() {
+    loguear("Terminando conexión TCP...", 'black');
+    $.get('/comandos/delete/' + id, function(data) {
+        if (data != "OK") {
+            loguear("¡Error! No se pudo terminar la conexión.", 'red');
+            $('#juego').hide();
+    	    $('#error').show();
+        } else {
+            id = data;
+            loguear("¡Conexión TCP cerrada con éxito!", 'green');
+            $('#juego').hide();
+            $('#fin').fadeIn();
+	}
+    })
+    .error(function(jqXHR, textStatus, errorThrown) {
+        if(textStatus == 'timeout') {
+            loguear("¡Error! No recibí respuesta del server de <i>frontend</i>.", 'red');
+        } else {
+            loguear("¡Error! No me pude comunicar con el server de <i>frontend</i>.", 'red');
+        }
+        $('#juego').hide();
+        $('#error').show();
+    });
+    return false;
+}
+
+function mostrar_log() {
+    $('#log').slideDown();
+    $('#abrir_log').hide();
+    $('#cerrar_log').show();
+    return false;
+}
+
+function ocultar_log() {
+    $('#log').slideUp();
+    $('#cerrar_log').hide();
+    $('#abrir_log').show();
+    return false;
+}
+
+function loguear(s, color) {
+    $('#log').prepend('<span style="display: block; color: ' + color + '">' + s + '</span>');
+}
+
+
+
+function enviar() {
+$('#dialogo > tbody:first').prepend('<tr><td>' + $("#texto").val() + '</td></tr>');
+$.get('/comandos/' + id + '/' + $('#texto').val(), function(data) {
+    $('#dialogo > tbody:first').prepend('<tr><td>' + data + '</td></tr>');
+});
+}
+</script>
+<title>
+Cliente de SOScrabble
+</title>
+<style type="text/css">
+* {
+    font-family: Verdana, Tahoma, Arial, sans-serif;
+}
+body {
+    background-color: #dbffef;
+}
+#global {
+    margin-left: auto;
+    margin-right: auto;
+    width: 1000px;
+}
+
+#banner {
+    width: 800px;
+/*    border-bottom: 2px solid #00949b;*/
+    clear: both;
+    margin-left: auto;
+    margin-right: auto;
+    height: 150px;
+}
+#mmos {
+    margin: 50px 0px 10px 0px;
+}
+#hasobro {
+    float: right;
+    margin: 10px;
+}
+#slogan {
+    color: #00848b;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+#coneccion {
+    text-align: center;
+    margin-top: 40px;
+    margin-bottom: 40px;
+}
+
+#coneccion input {
+    margin: 30px;
+}
+
+#coneccion a {
+    color: #1D9962;
+    padding: 7px;
+    text-decoration: none;
+}
+
+#coneccion a:hover {
+    background-color: #A6EDCE;
+}
+
+#botones_comandos {
+    margin-top: 40px;
+    text-align: center;
+}
+
+#botones_comandos a {
+    color: #1D9962;
+    padding: 7px;
+    text-decoration: none;
+}
+
+#botones_comandos a:hover {
+    background-color: #A6EDCE;
+}
+
+#error {
+    border: 1px solid red;
+    background-color: #FFA6A6;
+    color: #990000;
+    width: 380px;
+    height: 150px;
+    padding: 20px;
+    font-size: 12px;
+    padding-left: 40px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 20px;
+    display: none;
+}
+
+#error img {
+    margin-left: 160px;
+    margin-bottom: 20px;
+}
+
+#fin {
+    border: 1px solid green;
+    background-color: #93ED99;
+    color: #005500;
+    width: 380px;
+    height: 150px;
+    padding: 20px;
+    font-size: 12px;
+    padding-left: 50px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 20px;
+    display: none;
+}
+
+#fin img {
+    margin-left: 160px;
+    margin-bottom: 20px;
+}
+
+#registro {
+    text-align: center;
+    margin-top: 40px;
+    margin-bottom: 40px;
+    display: none;
+}
+
+#registro input {
+    margin: 30px;
+    border: 1px solid 1D9962;
+    background-color: white;
+    width: 250px;
+    height: 50px;
+    text-align: center;
+    font-size: 16px;
+}
+
+#registro a {
+    color: #1D9962;
+    padding: 7px;
+    text-decoration: none;
+}
+
+#registro a:hover {
+    background-color: #A6EDCE;
+}
+
+
+
+.tecla {
+    background-image: url('static/tecla.png');
+    font-size: 22px;
+    height: 34px;
+    width: 40px;
+    margin: 5px;
+    float: left;
+    text-align: center;
+    padding-top: 4px;
+    border: 0;
+    text-transform: uppercase;
+}
+
+.tecla_puesta {
+    background-image: url('static/tecla_amarilla.png');
+    font-size: 22px;
+    height: 34px;
+    width: 40px;
+    margin: 5px;
+    float: left;
+    text-align: center;
+    padding-top: 4px;
+    border: 0;
+    text-transform: uppercase;
+}
+
+.hack {
+    clear: both;
+}
+
+/* TODO: borrar
+.casillero {
+   width: 40px;
+   height: 34px;
+   margin: 5px;
+   float: left;
+   border: 1px solid #00848b;
+} */
+
+.casilla {
+   width: 40px;
+   height: 34px;
+   margin: 5px;
+   border: 1px solid #00848b;
+   text-transform: uppercase;
+}
+
+.deshabilitar {
+   pointer-events: none;
+   cursor: default;
+   color: #333 !important;
+   pointer: none;
+}
+
+#juego {
+  display: none;
+}
+#tablero {
+   margin-top: 30px;
+   margin-bottom: 30px;
+   margin-left: auto;
+   margin-right: auto;
+   text-align: center;
+}
+
+#tablero table {
+      margin-left: auto;
+   margin-right: auto;
+}
+
+#log_container {
+   padding-top: 20px;
+   font-size: 13px;
+   width: 800px;
+   margin-left: auto;
+   margin-right: auto;
+   color: #1D9962;
+   text-align: center;
+}
+
+#log_container a {
+   padding: 7px;
+   text-decoration: none;
+   color: #1D9962;
+}
+
+#log_container a:hover {
+   background-color: #A6EDCE;
+}
+
+
+#log {
+   margin-top: 7px;
+   width: 800px;
+   height: 300px;
+   background-color: #A6EDCE;
+   display: none;
+   font-size: 12px;
+   padding: 10px;
+   overflow: auto;
+   color: #1D9962;
+   text-align: left;
+}
+
+#cerrar_log {
+   display: none;
+}
+
+</style>
+</head>
+<body>
+<div id="global">
+<div id="banner">
+<img src="static/logo_belgrano.jpg" height="100px" id="mmos">
+<img src="static/logo_hasobro.png" id="hasobro">
+<div id="slogan">
+Multi Batalla Naval 2.0
+</div>
+</div>
+<div id="error">
+<img src="static/error.png"> <br />
+Se produjo un error no recuperable y el cliente finalizó.
+<ul>
+<li>Para más información, consultá el log.</li>
+<li>Para intentar nuevamente, apretá F5.</li>
+</ul>
+</div>
+<div id="fin">
+<img src="static/ok.png"> <br />
+El cliente de SOScrabble terminó exitosamente.
+<ul>
+<li>Para jugar nuevamente, apretá F5.</li>
+<li>Para revisar el partido, consultá el log.</li>
+</ul>
+</div>
+<div id="coneccion">
+<input type="image" onclick="return conectar();" src="static/start.png"><br />
+<a href="" onclick="return conectar();" style="cursor: pointer;">¡Empezar a jugar!</a>
+</div>
+<div id="registro">
+Nombre del Equipo:
+<input type="text" id="nombre_equipo" onclick="$(this).val('');" value="Azul"><br/>
+<a href="" onclick="return registrar();" style="cursor:pointer;">Registrarse en el servidor</a>
+</div>
+<div id="juego">
+<div id="botones_comandos">
+<a href="" onclick="return barco_completo();" id="btn-barco-terminado">Barco Terminado</a>
+<a href="" onclick="return update();">Actualizar</a>
+<a href="" onclick="return barcos_listos();">Todos los Barcos listos</a>
+<a href="" onclick="return finalizar();">Terminar el juego</a>
+</div>
+
+<div id="tablero">
+<table></table>
+</div>
+<div id="teclado">
+<div style="width: 250px; float: left;">&nbsp</div>
+<div class="tecla" id="barco">B <br/> Barco</div>
+<div class="tecla" id="bomba" style="display: none">+ <br/> Bomba</div>
+<div class="hack">&nbsp;</div>
+</div>
+</div>
+
+<div style="display: none;">
+<div id="id_socket">
+</div>
+<input type="text" id="texto">
+<a onclick="enviar();">Enviar</a>
+<table id="dialogo">
+<tbody>
+</tbody>
+</table>
+</div>
+</div>
+<div id="log_container">
+<a id="abrir_log" href="" onclick="return mostrar_log();">Mostrar log y comunicaci&oacute;n TCP</a>
+<a id="cerrar_log" href="" onclick="return ocultar_log();">Ocultar log y comunicaci&oacute;n TCP</a>
+<div id="log">
+&nbsp;
+</div>
+</div>
+</body>
+<script type="text/javascript">
+$(document).ready(function() {
+    $('.tecla').draggable({revert:true});
+    $.ajaxSetup({ timeout: 5000 });
+})
+</script>
+</html>
