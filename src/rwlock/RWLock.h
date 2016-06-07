@@ -1,6 +1,7 @@
 #ifndef RWLock_h
 #define RWLock_h
 #include <iostream>
+#include <pthread.h>
 
 class RWLock {
     public:
