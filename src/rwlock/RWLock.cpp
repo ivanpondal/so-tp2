@@ -13,10 +13,10 @@ RWLock :: RWLock() {
 void RWLock :: rlock() {
 	pthread_mutex_lock(&read_write_mutex);
 	if(writing_count > 0){
-        pthread_cond_wait(&turn_cv, &read_write_mutex);
+		pthread_cond_wait(&turn_cv, &read_write_mutex);
 	}
 	while(writing){
-        pthread_cond_wait(&turn_cv, &read_write_mutex);
+		pthread_cond_wait(&turn_cv, &read_write_mutex);
 	}
 	read_count++;
 	pthread_mutex_unlock(&read_write_mutex);
@@ -26,7 +26,7 @@ void RWLock :: wlock() {
 	pthread_mutex_lock(&read_write_mutex);
 	writing_count++;
 	while(writing || read_count > 0){
-        pthread_cond_wait(&turn_cv, &read_write_mutex);
+		pthread_cond_wait(&turn_cv, &read_write_mutex);
 	}
 	writing = true;
 	pthread_mutex_unlock(&read_write_mutex);
