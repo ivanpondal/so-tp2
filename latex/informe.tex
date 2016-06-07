@@ -1,0 +1,94 @@
+% ALGUNOS PAQUETES REQUERIDOS (EN UBUNTU): %
+% ========================================
+% %
+% texlive-latex-base %
+% texlive-latex-recommended %
+% texlive-fonts-recommended %
+% texlive-latex-extra %
+% texlive-lang-spanish (en ubuntu 13.10) %
+% ******************************************************** %
+
+\documentclass[a4paper]{article}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{fancyhdr}
+\usepackage[pdftex]{graphicx}
+\usepackage{sidecap}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{makeidx}
+\usepackage{float}
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{amsfonts}
+\usepackage{sectsty}
+\usepackage{wrapfig}
+\usepackage{listings}
+\usepackage{pgfplots}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{listingsutf8}
+
+\linespread{factor}
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\pgfplotsset{compat=1.3}
+\setlist[enumerate]{label*=\arabic*.}
+\lstset{
+	inputencoding=utf8/latin1,
+	language=C++,
+	basicstyle=\ttfamily,
+	keywordstyle=\bfseries\color{blue},
+	stringstyle=\color{red}\ttfamily,
+	commentstyle=\color{mygreen}\ttfamily,
+	morecomment=[l][\color{magenta}]{\#},
+	numbers=left,
+	numberstyle=\color{mygray}
+}
+
+\input{codesnippet}
+\input{page.layout}
+\usepackage{caratula}
+
+\newcommand{\ord}{\ensuremath{\operatorname{O}}}
+\newcommand{\nat}{\ensuremath{\mathbb{N}}}
+
+%\lstset{
+%    language=C++,
+%    basicstyle=\ttfamily,
+%    keywordstyle=\color{blue}\ttfamily,
+%    stringstyle=\color{red}\ttfamily,
+%    commentstyle=\color{ForestGreen}\ttfamily,
+%    morecomment=[l][\color{magenta}]{\#}
+%}
+
+\begin{document}
+\materia{Sistemas Operativos}
+\submateria{Primer Cuatrimestre de 2016}
+\titulo{Trabajo Práctico 1}
+\subtitulo{Scheduling}
+\integrante{Franco Frizzo}{013/14}{francofrizzo@gmail.com}
+\integrante{Iván Pondal}{078/14}{ivan.pondal@gmail.com}
+\integrante{Maximiliano Paz}{251/14}{m4xileon@gmail.com}
+
+\maketitle
+% no footer on the first page
+\thispagestyle{empty}
+
+\newpage
+\tableofcontents
+
+\newpage
+\section{Read-Write Lock}
+Para llevar a cabo el Lock hemos necesitado un mutex ($read_write_mutex$) , una variable de condición ($turn_cv$) un contador de lecotores ($read_count$) y otro para los escritores ($write_count$) y una booleana para saber cuando se esta escribiendo ($writing$).
+
+Para que nuestra solución no genere inanición, el mutex usado debe respetar el orden de llegada. Asi las tareas son atendidas como si estuvieran en una cola.
+
+Las escrituras esperan a que no hayan lecturas pendientes y nadie este escribiendo. Las lecturas esperan un signal si hay alguna escritura pendiente y se quedan esperando si hay alguien escribiendo .
+Si por cada rlock() se hace un  runlock() y por cada wlock() se hace un wunlock(), entonces no hay deadLock.
+ 
+
+
+\end{document}
