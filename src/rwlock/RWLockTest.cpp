@@ -4,6 +4,8 @@
 #define NUM_THREADS 20
 
 RWLock counter_lock;
+RWLock read_count_lock;
+int readers = 0;
 int counter = 0;
 pthread_t thread[NUM_THREADS];
 int counter_array[NUM_THREADS];
@@ -13,6 +15,9 @@ void* reader(void*){
 	std::cout << "LEYENDO counter = " << counter << std::endl;
 	counter_lock.runlock();
 
+	read_count_lock.wlock();
+	readers++;
+	read_count_lock.wunlock();
 	return NULL;
 }
 
@@ -46,7 +51,12 @@ int main(){
 		}
 	}
 
+	if(readers != NUM_THREADS/2){
+		std::cout << "ERROR readers != " << NUM_THREADS/2 << std::endl;
+		no_error = false;
+	}
+
 	if(no_error){
-			std::cout << "La prueba terminó correctamente" << std::endl;
+		std::cout << "La prueba terminó correctamente" << std::endl;
 	}
 }
