@@ -178,16 +178,19 @@ void *atendedor_de_jugador(void *socketfd_cliente) {
     vector<vector<char> > *tablero_jugador;
     vector<vector<char> > *tablero_rival;
     RWLock *tablero_jugador_rwlock;
+    RWLock *tablero_rival_rwlock;
 
     //Veo que tablero usar dependiendo el equipo que soy
     if(!soy_equipo_1){
         tablero_jugador = &tablero_equipo2;
         tablero_rival = &tablero_equipo1;
         tablero_jugador_rwlock = &tablero_equipo2_rwlock;
+        tablero_rival_rwlock = &tablero_equipo1_rwlock;
     }else{
         tablero_jugador = &tablero_equipo1;
         tablero_rival = &tablero_equipo2;
         tablero_jugador_rwlock = &tablero_equipo1_rwlock;
+        tablero_rival_rwlock = &tablero_equipo2_rwlock;
     }
 
     while (true) {
@@ -321,11 +324,15 @@ void *atendedor_de_jugador(void *socketfd_cliente) {
             if (peleando && ficha.fila <= alto - 1 && ficha.columna <= ancho - 1) {
 
                 //Si había un BARCO, pongo una BOMBA
+                (*tablero_rival_rwlock).rlock();
                 char contenido = (*tablero_rival)[ficha.fila][ficha.columna];
+                (*tablero_rival_rwlock).runlock();
 
                 if(contenido == BARCO){
 
+                    (*tablero_rival_rwlock).wlock();
                     (*tablero_rival)[ficha.fila][ficha.columna] = BOMBA;
+                    (*tablero_rival_rwlock).wunlock();
 
                     if (enviar_golpe(socket_fd) != 0) {
                         // se produjo un error al enviar. Cerramos todo.
