@@ -198,8 +198,9 @@ es mayor a 0 y los escritores a que no queden threads leyendo ni escribiendo.
 
 Cabe destacar que parte del motivo por el cual esto funciona es que
 \texttt{pthreads} asegura que si hay varios threads esperando a que se libere un
-mutex, al recibir un signal habrá \emph{justicia} respecto quién lo recibe. Esto implica
-que no puede haber un thread esperando eternamente a que se le otorgue un mutex.
+mutex, al recibir un signal habrá \emph{justicia} respecto quién lo recibe.
+Esto implica que no puede haber un thread esperando eternamente a que se le
+otorgue un mutex.
 
 \subsection{Deadlock}
 
@@ -217,26 +218,140 @@ thread es despertado y su condición se cumple, el mutex asociado es liberado.
 Por lo tanto no es posible que haya \emph{hold and wait} en la implementación
 desarrollada, evitando así la existencia de un deadlock.
 
-\section{Backend}
-Se espera que se conecten jugadores y por cada jugador se crea un thread.
+\section{Servidor de backend}
+Para adaptar la implementación del servidor de \emph{backend}, se utilizó
+\texttt{pthreads} para crear un \emph{thread} por cada nuevo jugador que se
+conecta al servidor de \emph{frontend}. La función que ejecutan estos
+\emph{threads} es \texttt{atendedor\_de\_jugador}, la cual fue adaptada
+tomando como base el trabajo realizado por los programadores \emph
+{monoproceso-teístas}.
 
-Tenemos un mutex para acceder a los nombres de los equipos. Para diferenciar a
-que equipo pertenece,  buscamos si alguno de los dos bandos que tenga ese nombre
-lo agregamos a ese equipo, caso contrario si todavia no se crearon los dos
-grupos se crea uno con su nombre, si ya existian los dos equipo se elimina ese
-thread.
+\subsection{Variables globales}
+Los siguientes datos se almacenan de forma global y son accesibles en
+cualquier momento por todos los \emph{threads}.
+\begin{itemize}
+    \item El \emph{socket} mediante el cual el servidor de \emph{backend} se
+    comunica con el servidor de \emph{frontend}.
+    \item Los nombres de los equipos en juego, que son dos como máximo:
+    \texttt{nombre\_equipo1} y \texttt{nombre\_equipo2}. El acceso a los
+    mismos se encuentra protegido por un \emph{mutex}.
+    \item Las dimensiones del tablero, \texttt{ancho} y \texttt{alto}, que se
+    fijan por única vez al lanzar el servidor, y las posiciones en el mismo de
+    las fichas de cada equipo, \texttt{tablero\_equipo1} y
+    \texttt{tablero\_equipo2}, protegidas por un \emph{read-write lock}
+    diferente para cada equipo.
+    \item Un contador, \texttt{cant\_jugadores}, que permite conocer la
+    cantidad de jugadores que ya se incorporaron al juego pero aún no
+    terminaron de colocar su barcos (más adelante se detalla por qué esto es
+    necesario). También se utiliza un \emph{mutex} para proteger el acceso a
+    esta variable.
+    \item Una \emph{flag} booleana, \texttt{peleando}, que indica si el juego
+    está en la fase de batalla. Esta variable comienza con el valor
+    \texttt{false} y es actualizada por única vez en forma conjunta con el
+    contador recién mencionado. Por este motivo, no se utiliza un \emph{mutex}
+    particular para proteger el acceso a la misma.
+\end{itemize}
 
-Para colocar una ficha, se usa el lock de lectura, revisamos si la ficha a
-colocar es valida, si lo es se cierra el lock y se abre el lock de escritura,
-luego se revisa si ese casillero todavia esta libre, si lo esta se agrega esa
-ficha al barco actual y se pone el casillero donde iria la ficha como ocupado,
-luego se cierra el lock de escritura. En caso contrario se borra el barco en
-construccion.  Para borrar el barco en construccion se usa el lock de escribir y
-se limpia el tablero se borra el barco.
+\subsection{Funcionalidad del juego}
 
-Tenemos un mutex para el contador la cantidad de jugadores que faltan para
-empezar el juego.Cada vez se une un jugador se aumenta el contador, si un
-jugador fue eliminado ó envia el comando \'listo\', el contador disminuye en 1,
-cuando  es $0$ empieza la batalla.
+A continuación se detallan las modificaciones que fueron necesarias para
+adaptar cada una de las acciones que puede realizar un jugador, que se
+corresponden con los mensajes que acepta y a los cuales es capaz de responder
+la función \texttt{atendedor\_de\_jugador}.
+
+\subsubsection{Agregar un nuevo jugador}
+Cuando se conecta un nuevo jugador, se le solicita que ingrese un nombre de
+equipo. Si el nombre ingresado por el jugador corresponde
+a un equipo ya existente, se lo agrega a dicho equipo. En caso contrario, dado
+que hay un límite de dos equipos posibles, se verifica que no se haya
+alcanzado dicho límite. Si es posible, se crea un nuevo equipo con el nombre
+ingresado por el jugador y se lo agrega a este equipo; si no, se informa al
+jugador de que se produjo un error y se elimina el thread correspondiente
+(utilizando la función \texttt{pthread\_exit}).
+
+Cuando el juego se encuentra en la fase de armado de barcos, cada jugador
+que se incorpora incrementa en uno el contador de juegadores global. Dicho
+contador será luego decrementado cuando el jugador indique que sus barcos
+están listos, permitiendo conocer cuándo ya están listos todos los
+participantes, para así pasar a la fase de batalla. Una vez en esta fase, se
+permite agregar nuevos jugadores, pero los mismos ya no pueden sumar barcos
+al tablero.
+
+Para acceder tanto a los nombres de los equipos como al contador de jugadores
+deben solicitarse los respectivos \emph{mutex} que protegen estos recursos.
+
+%%% PSEUDOCÓDIGO
+
+\subsubsection{Agregar piezas a un barco}
+
+En primer lugar, un jugador solo puede agregar fichas al tablero si el juego
+aún no pasó a la fase de batalla; para verificar esto se chequea la
+\emph{flag} global que lo indica, sin solicitar ningún \emph{mutex} ya que no
+se alterará su contenido. Más aún, sabemos que mientras se esté procesando
+este pedido el juego no cambiará de fase, ya que para esto es requisito que
+todos los jugadores indiquen que están listos, lo cual incluye al jugador
+actual. Por otro lado debe verificarse que el propio jugador no haya indicado
+que ya está listo para la batalla, lo cual se conoce mediante una variable
+booleana local.
+
+Luego debe verificarse que la ficha a colocar sea válida; dado que para esto
+es necesario acceder al tablero del jugador actual, se solicita
+momentáneamente acceso como lector al \emph{read-write lock} correspondiente.
+
+Si la ficha es correcta, se solicita el \emph{read-write lock} de escritura.
+Aún falta verificar que la posición del tablero donde quiere colocarse una
+ficha no esté ocupada. Este chequeo debe hacerse de forma atómica con el
+agregado de la ficha, para evitar que dos usuarios intenten colocar
+simultáneamente una ficha en la misma posición. Si el casillero todavía esta
+libre, se agrega la ficha al tablero, guardando un registro de la misma como
+parte del barco actual por si debe se retirada, y luego se libera el
+\emph{read-write lock}. Si el casillero está ocupado, se libera el
+\emph{read-write lock} y se llama a la función auxiliar
+\texttt{quitar\_partes\_barco}, que elimina del tablero todas las piezas del
+barco actualmente en construcción. Esta función vuelve a solicitar el \emph
+{read-write lock} para escritura, ya que necesita modificar el estado del
+tablero.
+
+En el caso de que intente colocarse una ficha inválida, se utiliza también la
+función \texttt{quitar\_partes\_barco}.
+
+%%% PSEUDOCÓDIGO
+
+\subsubsection{Marcar un barco como terminado}
+
+En primer lugar, se verifica que el juego no haya pasado a la fase de batalla;
+como se explicó en el caso anterior, para esto no hace falta solicitar
+\emph{mutex} alguno. Luego se solicita para escritura el \emph{read-write
+lock} del tablero del jugador actual, se agregan al tablero todas las fichas
+del barco recién creado (¿esto no estaba ya?), y se vuelve a liberar el lock
+de escritura. Por último, se vacía el vector donde se mantenía el registro de
+las fichas de dicho barco.
+
+\subsubsection{Indicar que todos los barcos están listos}
+Cuando el jugador notifica que ya no agregará nuevos barcos y está listo para
+la batalla, el \emph{thread} correspondiente debe, en primer lugar, actualizar
+su variable local \texttt{listo} con el valor \texttt{true}. Luego, para
+notificar de esta situación a los demás \emph{threads} se pide el
+\emph{mutex} que protege al contador de jugadores que aún no están listos.
+Este contador se decrementa en uno y, en caso de que haya llegado a cero (es
+decir, de que todos los jugadores hayan comunicado que están listos) se
+actualiza el valor de la \emph{flag} global \texttt{peleando} a \texttt{true},
+con lo cual el juego pasa a estar en la fase de batalla.
+
+\subsubsection{Tirar una bomba}
+La lógica de la implementación realizada por los programadores \emph
+{monoproceso-teístas} para tirar una bomba ya era compatible con el modo
+multijugador, por lo que no hubo que hacer grandes modificaciones. Solo se
+necesitó pedir el \emph{read-write lock} del tablero del rival como lector
+para conocer el contenido de la casilla deseada, y en caso de haber un barco,
+también solicitar el \emph{read-write lock} como escritor para poder colocar
+la bomba en dicha casilla.
+
+\subsubsection{Actualizar el tablero}
+Para poder enviar a un jugador el estado actual del tablero, fue necesario
+solicitar como lector el \emph{read-write lock} correspondiente. Para esto,
+se agregó una sencilla lógica que permite decidir, según la fase del juego y
+el equipo del jugador actual, cuál es el tablero a enviar, como así también
+solicitar el \emph{read-write lock} apropiado.
 
 \end{document}
