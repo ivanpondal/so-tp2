@@ -82,21 +82,127 @@
 
 \newpage
 \section{Read-Write Lock}
-Para llevar a cabo el Lock hemos necesitado un mutex ($read_write_mutex$) , una
-variable de condición ($turn_cv$) un contador de lecotores ($read_count$) y otro
-para los escritores ($write_count$) y una booleana para saber cuando se esta
-escribiendo ($writing$).
+Para cumplir con el requisito de que no haya inanición se necesitaron las
+siguientes estructuras:
 
-Para que nuestra solución no genere inanición, el mutex usado debe respetar el
-orden de llegada. Asi las tareas son atendidas como si estuvieran en una cola.
+\begin{itemize}
+    \item{Mutex \texttt{read\_write\_mutex}}
+    \item{Variable condicional \texttt{turn\_cv}}
+    \item{Contador de lectores \texttt{read\_count}}
+    \item{Contador de escritores \texttt{writing\_count}}
+    \item{Flag \texttt{writing}}
+\end{itemize}
 
-Las escrituras esperan a que no hayan lecturas pendientes y nadie este
-escribiendo. Las lecturas esperan un signal si hay alguna escritura pendiente y
-se quedan esperando si hay alguien escribiendo .  Si por cada rlock() se hace un
-runlock() y por cada wlock() se hace un wunlock(), entonces no hay deadLock, ya
-que runlock() libera la proxima escitura y wunlock() libera la proxima escritura
-ó grupo de lecturas.
+El problema de inanición está presente si al tener una secuencia no acotada
+de pedidos de lectura o escritura al intentar la operación contraria esta queda
+bloqueada. A continuación se explican las medidas necesarias para evitar que
+suceda esto.
 
+\subsection*{rlock()}
+\begin{codesnippet}
+\begin{verbatim}
+Pedir mutex
+Si el número de escritores es mayor a 0
+    Esperar turno
+Mientras haya una escritura en proceso
+    Esperar turno
+Aumentar en uno número de lectores
+Liberar mutex
+\end{verbatim}
+\end{codesnippet}
+
+A la hora de llamar a \texttt{rlock()} se pide el mutex
+\texttt{read\_write\_mutex} y se procede a consultar si es posible la lectura.
+Para esto se pide el valor de \texttt{writing\_count} donde si el mismo es mayor
+a 0 entonces es necesario esperar ya que de otra forma no se podría frenar una
+secuencia no acotada de pedidos de lectura. Además se consulta si la bandera
+\texttt{writing} está alzada, ya que es aquí donde el thread se quedará
+esperando hasta poder efectuar su lectura.
+
+\subsection*{runlock()}
+\begin{codesnippet}
+\begin{verbatim}
+Pedir mutex
+Disminuir en uno número de lectores
+Si el número de lectores es cero
+    Dar turno a todos los que estén esperando uno
+Liberar mutex
+\end{verbatim}
+\end{codesnippet}
+
+Cuando se termina la lectura, con \texttt{runlock()} se disminuye el
+valor de \texttt{read\_count} tal que en caso de llegar a 0 se despiertan
+todos los threads que estuvieran esperando la condición \texttt{turn\_cv}. Esto
+permite despertar a escritores que hubieran llegado en medio de una lectura.
+
+\subsection*{wlock()}
+\begin{codesnippet}
+\begin{verbatim}
+Pedir mutex
+Aumentar en uno número de escritores
+Mientras haya una escritura en proceso o el número de lectores sea mayor a cero
+    Esperar turno
+Subir bandera de escritura en proceso
+Liberar mutex
+\end{verbatim}
+\end{codesnippet}
+
+Con respecto a los pedidos de escritura mediante \texttt{wlock()}, lo primero
+que se hace es aumentar el valor de \texttt{writing\_count} para que en caso de
+llegar una pedido de lectura el mismo deba esperar. Luego se espera a que se
+cumplan dos condiciones: que \texttt{writing = false} y \texttt{read\_count =
+0}. Esto es necesario para evitar que haya más de una escritura en simultáneo y
+que únicamente se escriba cuando no hay nadie leyendo. Esta condición se cumple
+en algún momento ya que al llevar \texttt{writing\_count} a un valor mayor a 0 los
+nuevos pedidos de lectura se ven obligados a esperar, permitiendo así que
+\texttt{read\_count} disminuya más rápido de lo que aumenta llegando finalmente
+a 0. En el caso de \texttt{writing} se sabe que a lo sumo hay un thread
+escribiendo, por lo tanto el mismo tendrá que llamar a \texttt{wunlock()}
+bajando la bandera.
+
+\subsection*{wunlock()}
+\begin{codesnippet}
+\begin{verbatim}
+Pedir mutex
+Bajar bandera de escritura en proceso
+Disminuir en uno número de escritores
+Dar turno a todos los que estén esperando uno
+Liberar mutex
+\end{verbatim}
+\end{codesnippet}
+Una vez finalizada la escritura, \texttt{wunlock()} baja la bandera
+\texttt{writing}, diminuye el número de escritores \texttt{writing\_count} y
+despierta a todos los threads que estén esperando la variable condicional
+\texttt{turn\_cv}.
+
+\subsection{Inanición}
+
+Como se explicó en el funcionamiento de la estructura, la misma cuenta con
+mecanismos para evitar que queden pedidos ya sea de lectura o escritura sin
+atender por una secuencia no acotada de la operación contraria. Básicamente esto
+se reduce al hecho de que las lecturas deben esperar si el número de escritores
+es mayor a 0 y los escritores a que no queden threads leyendo ni escribiendo.
+
+Cabe destacar que parte del motivo por el cual esto funciona es que
+\texttt{pthreads} asegura que si hay varios threads esperando a que se libere un
+mutex, al recibir un signal habrá \emph{justicia} respecto quién lo recibe. Esto implica
+que no puede haber un thread esperando eternamente a que se le otorgue un mutex.
+
+\subsection{Deadlock}
+
+Para demostrar que no hay deadlock alcanza con probar que no se cumple la
+condición \emph{hold and wait}. Esta condición necesaria pero no suficiente para
+que haya deadlock se cumple cuando hay un proceso que toma un recurso y no lo
+libera hasta no tener todo lo necesario para poder ejecutar su tarea.
+
+En el read-write lock esto ocurriría si un thread en caso de no poder escribir o
+leer se quedará con el mutex, reteniéndolo hasta poder operar. Sin embargo,
+todos los mutex son liberados en cuanto el thread decide esperar a su respectiva
+variable de condición, por lo tanto nunca es retenido. A su vez, cuando un
+thread es despertado y su condición se cumple, el mutex asociado es liberado.
+
+Por lo tanto no es posible que haya \emph{hold and wait} en la implementación
+desarrollada, evitando así la existencia de un deadlock.
 
 \section{Backend}
 Se espera que se conecten jugadores y por cada jugador se crea un thread.
