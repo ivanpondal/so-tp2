@@ -78,9 +78,22 @@
 \thispagestyle{empty}
 
 \newpage
-\tableofcontents
+\section{Introducción}
+En el presente informe, se relatan a grandes rasgos los pasos que fueron
+necesarios para adaptar la implementación del juego \emph{Batalla Naval} y así
+permitir la conexión simultánea de varios jugadores. Con este fin
+se utilizó la biblioteca de POSIX Threads (\texttt{pthreads}), haciendo
+cambios en el servidor de \emph{backend} que atiende los pedidos de los
+distintos jugadores.
 
-\newpage
+El informe se divide en dos secciones. En primer lugar, se detalla la
+implementación de un \emph{read-write lock}, que fue necesario para ordenar
+los accesos a los recursos compartidos del juego evitando que se produzcan
+situaciones de \emph{deadlock} o inanición. En la segunda sección, se
+especifican las modificaciones que se hicieron en el servidor propiamente
+dicho y en la forma en que el mismo atiende cada una de las solicitudes de los
+usuarios.
+
 \section{Read-Write Lock}
 Para cumplir con el requisito de que no haya inanición se necesitaron las
 siguientes estructuras:
