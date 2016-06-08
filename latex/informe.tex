@@ -259,7 +259,7 @@ adaptar cada una de las acciones que puede realizar un jugador, que se
 corresponden con los mensajes que acepta y a los cuales es capaz de responder
 la función \texttt{atendedor\_de\_jugador}.
 
-\subsubsection{Agregar un nuevo jugador}
+\subsubsection*{Agregar un nuevo jugador}
 Cuando se conecta un nuevo jugador, se le solicita que ingrese un nombre de
 equipo. Si el nombre ingresado por el jugador corresponde
 a un equipo ya existente, se lo agrega a dicho equipo. En caso contrario, dado
@@ -282,7 +282,7 @@ deben solicitarse los respectivos \emph{mutex} que protegen estos recursos.
 
 %%% PSEUDOCÓDIGO
 
-\subsubsection{Agregar piezas a un barco}
+\subsubsection*{Agregar piezas a un barco}
 
 En primer lugar, un jugador solo puede agregar fichas al tablero si el juego
 aún no pasó a la fase de batalla; para verificar esto se chequea la
@@ -317,17 +317,17 @@ función \texttt{quitar\_partes\_barco}.
 
 %%% PSEUDOCÓDIGO
 
-\subsubsection{Marcar un barco como terminado}
+\subsubsection*{Marcar un barco como terminado}
 
 En primer lugar, se verifica que el juego no haya pasado a la fase de batalla;
 como se explicó en el caso anterior, para esto no hace falta solicitar
 \emph{mutex} alguno. Luego se solicita para escritura el \emph{read-write
 lock} del tablero del jugador actual, se agregan al tablero todas las fichas
-del barco recién creado (¿esto no estaba ya?), y se vuelve a liberar el lock
-de escritura. Por último, se vacía el vector donde se mantenía el registro de
-las fichas de dicho barco.
+del barco recién creado, y se vuelve a liberar el \emph{lock} de escritura.
+Por último, se vacía el vector donde se mantenía el registro de las fichas de
+dicho barco.
 
-\subsubsection{Indicar que todos los barcos están listos}
+\subsubsection*{Indicar que todos los barcos están listos}
 Cuando el jugador notifica que ya no agregará nuevos barcos y está listo para
 la batalla, el \emph{thread} correspondiente debe, en primer lugar, actualizar
 su variable local \texttt{listo} con el valor \texttt{true}. Luego, para
@@ -338,7 +338,7 @@ decir, de que todos los jugadores hayan comunicado que están listos) se
 actualiza el valor de la \emph{flag} global \texttt{peleando} a \texttt{true},
 con lo cual el juego pasa a estar en la fase de batalla.
 
-\subsubsection{Tirar una bomba}
+\subsubsection*{Tirar una bomba}
 La lógica de la implementación realizada por los programadores \emph
 {monoproceso-teístas} para tirar una bomba ya era compatible con el modo
 multijugador, por lo que no hubo que hacer grandes modificaciones. Solo se
@@ -347,7 +347,7 @@ para conocer el contenido de la casilla deseada, y en caso de haber un barco,
 también solicitar el \emph{read-write lock} como escritor para poder colocar
 la bomba en dicha casilla.
 
-\subsubsection{Actualizar el tablero}
+\subsubsection*{Actualizar el tablero}
 Para poder enviar a un jugador el estado actual del tablero, fue necesario
 solicitar como lector el \emph{read-write lock} correspondiente. Para esto,
 se agregó una sencilla lógica que permite decidir, según la fase del juego y
