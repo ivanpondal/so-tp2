@@ -5,11 +5,12 @@
 #include "Encabezado.h"
 #include "Casillero.h"
 #include "Enviar_recibir.h"
+#include "../rwlock/RWLock.h"
 
 using namespace std;
 bool cargar_int(const char* numero, unsigned int& n);
 
-void atendedor_de_jugador(int socket_fd);
+void *atendedor_de_jugador(void *socket_fd);
 
 
 // mensajes recibidos por el server
@@ -30,9 +31,9 @@ int enviar_estaba_golpeado(int socket_fd);
 
 // otras funciones
 void cerrar_servidor(int signal);
-void terminar_servidor_de_jugador(int socket_fd, list<Casillero>& barco_actual, vector<vector<char> >& tablero_cliente);
+void terminar_servidor_de_jugador(int socket_fd, list<Casillero>& barco_actual, vector<vector<char> >& tablero_cliente, RWLock& tablero_cliente_rwlock);
 
-void quitar_partes_barco(list<Casillero>& barco_actual, vector<vector<char> >& tablero_cliente);
+void quitar_partes_barco(list<Casillero>& barco_actual, vector<vector<char> >& tablero_cliente, RWLock& tablero_cliente_rwlock);
 bool es_ficha_valida(const Casillero& ficha, const list<Casillero>& barco_actual, const vector<vector<char> >& tablero);
 Casillero casillero_mas_distante_de(const Casillero& ficha, const list<Casillero>& barco_actual);
 bool puso_barco_en(unsigned int fila, unsigned int columna, const list<Casillero>& barco_actual);
