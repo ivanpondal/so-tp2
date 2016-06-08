@@ -87,8 +87,23 @@ Para llevar a cabo el Lock hemos necesitado un mutex ($read_write_mutex$) , una 
 Para que nuestra solución no genere inanición, el mutex usado debe respetar el orden de llegada. Asi las tareas son atendidas como si estuvieran en una cola.
 
 Las escrituras esperan a que no hayan lecturas pendientes y nadie este escribiendo. Las lecturas esperan un signal si hay alguna escritura pendiente y se quedan esperando si hay alguien escribiendo .
-Si por cada rlock() se hace un  runlock() y por cada wlock() se hace un wunlock(), entonces no hay deadLock.
- 
+Si por cada rlock() se hace un  runlock() y por cada wlock() se hace un wunlock(), entonces no hay deadLock, ya que runlock() libera la proxima escitura y wunlock() libera la proxima escritura ó grupo de lecturas.
+
+
+\section{Backend}
+Se espera que se conecten jugadores y por cada jugador se crea un thread.
+
+Tenemos un mutex para acceder a los nombres de los equipos. Para diferenciar a que equipo pertenece,  buscamos si alguno de los dos bandos que tenga ese nombre lo agregamos a ese equipo, caso contrario si todavia no se crearon los dos grupos se crea uno con su nombre, si ya existian los dos equipo se elimina ese thread.
+
+Para colocar una ficha, se usa el lock de lectura, revisamos si la ficha a colocar es valida, si lo es se cierra el lock y se abre el lock de escritura, luego se revisa si ese casillero todavia esta libre, si lo esta se agrega esa ficha al barco actual y se pone el casillero donde iria la ficha como ocupado, luego se cierra el lock de escritura. En caso contrario se borra el barco en construccion.
+Para borrar el barco en construccion se usa el lock de escribir y se limpia el tablero se borra el barco.
+
+Tenemos un mutex para el contador la cantidad de jugadores que faltan para empezar el juego.Cada vez se une un jugador se aumenta el contador, si un jugador fue eliminado ó envia el comando \'listo\', el contador disminuye en 1, cuando  es $0$ empieza la batalla.
+
+
+
+
+
 
 
 \end{document}
