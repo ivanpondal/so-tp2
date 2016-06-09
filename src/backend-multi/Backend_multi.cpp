@@ -227,18 +227,18 @@ void *atendedor_de_jugador(void *socketfd_cliente) {
                 if((*tablero_jugador)[ficha.fila][ficha.columna] == VACIO){
                     barco_actual.push_back(ficha);
                     (*tablero_jugador)[ficha.fila][ficha.columna] = ficha.contenido;
+                    (*tablero_jugador_rwlock).wunlock();
                 }
                 else{
                     // ERROR
+                    (*tablero_jugador_rwlock).wunlock();
                     quitar_partes_barco(barco_actual, *tablero_jugador, *tablero_jugador_rwlock);
 
                     if (enviar_error(socket_fd) != 0) {
-                        (*tablero_jugador_rwlock).wunlock();
                         // se produjo un error al enviar. Cerramos todo.
                         terminar_servidor_de_jugador(socket_fd, barco_actual, *tablero_jugador, *tablero_jugador_rwlock);
                     }
                 }
-                (*tablero_jugador_rwlock).wunlock();
                 // OK
                 if (enviar_ok(socket_fd) != 0) {
                     // se produjo un error al enviar. Cerramos todo.
@@ -287,7 +287,7 @@ void *atendedor_de_jugador(void *socketfd_cliente) {
 
 
             //Si estoy peleando, no acepto barcos ya
-            if(peleando){
+            if(peleando || listo){
                 if (enviar_error(socket_fd) != 0) {
                     // se produjo un error al enviar. Cerramos todo.
                     terminar_servidor_de_jugador(socket_fd, barco_actual, *tablero_jugador, *tablero_jugador_rwlock);
