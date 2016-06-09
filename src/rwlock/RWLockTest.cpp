@@ -14,7 +14,7 @@ void* reader(void*){
 	counter_lock.rlock();
 	std::cout << "LEYENDO counter = " << counter << std::endl;
 	counter_lock.runlock();
-
+	// Se aumenta el número de lecturas
 	read_count_lock.wlock();
 	readers++;
 	read_count_lock.wunlock();
@@ -31,6 +31,7 @@ void* writer(void*){
 }
 
 int main(){
+	// Se generan NUM_THREADS/2 lectores y escritores
 	for(int i = 0; i < NUM_THREADS; i++){
 		if(i % 2 == 0){
 			pthread_create(&thread[i], NULL, reader, NULL);
@@ -39,11 +40,13 @@ int main(){
 			pthread_create(&thread[i], NULL, writer, NULL);
 		}
 	}
+	// Se espera a que terminen todos
 	for(int i = 0; i < NUM_THREADS; i++){
 		pthread_join(thread[i], NULL);
 	}
 
 	bool no_error = true;
+	// Se verifica que todos los escritores hayan completado correctamente el arreglo
 	for(int i = 0; i < NUM_THREADS/2; i++){
 		if(counter_array[i] != i){
 			std::cout << "ERROR counter[" << i << "] != " << i << std::endl;
@@ -51,6 +54,7 @@ int main(){
 		}
 	}
 
+	// Se verifica que la cantidad de lectores sea correcta
 	if(readers != NUM_THREADS/2){
 		std::cout << "ERROR readers != " << NUM_THREADS/2 << std::endl;
 		no_error = false;
